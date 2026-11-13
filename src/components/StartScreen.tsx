@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ClipboardPaste,
   FolderOpen,
+  Globe,
   ImagePlus,
   Sparkles,
   Trash2,
@@ -26,6 +27,7 @@ export const StartScreen: React.FC = () => {
   const [sourceUrl, setSourceUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isCapturingUrl, setIsCapturingUrl] = useState(false);
 
   const imageInputRef = useRef<HTMLInputElement>(null);
   const projectInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +110,55 @@ export const StartScreen: React.FC = () => {
       loadSnapshot(snap);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка импорта проекта');
+    }
+  };
+
+  const handleCaptureUrl = async () => {
+    const raw = sourceUrl.trim();
+    if (!raw) {
+      setError('Введите URL сайта (например, https://richnachas.com)');
+      return;
+    }
+    const normalizedUrl = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    setError(null);
+    setIsCapturingUrl(true);
+    try {
+      const res = await fetch('/api/capture-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: normalizedUrl }),
+      });
+      const data = (await res.json()) as {
+        title?: string;
+        url?: string;
+        width?: number;
+        height?: number;
+        screenshotDataUrl?: string;
+        domElements?: Array<{
+          name: string;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          domMetadata?: Record<string, string>;
+        }>;
+        error?: string;
+      };
+      if (!res.ok || !data.screenshotDataUrl) {
+        throw new Error(data.error || `Ошибка захвата сайта (HTTP ${res.status})`);
+      }
+      await createProjectFromImage(
+        data.title || normalizedUrl,
+        data.url || normalizedUrl,
+        data.screenshotDataUrl,
+        data.width || 1280,
+        data.height || 800,
+        data.domElements
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось захватить сайт по URL');
+    } finally {
+      setIsCapturingUrl(false);
     }
   };
 
@@ -254,7 +305,7 @@ export const StartScreen: React.FC = () => {
               justifyContent: 'center',
               alignItems: 'center',
               flexWrap: 'wrap',
-              maxWidth: 500,
+              maxWidth: 620,
               margin: '0 auto 14px',
             }}
           >
@@ -262,10 +313,25 @@ export const StartScreen: React.FC = () => {
               type="url"
               className="vp-input"
               style={{ flex: 1, minWidth: 220 }}
-              placeholder="URL сайта (необязательно, напр. https://richnachas.com)"
+              placeholder="URL сайта (напр. https://richnachas.com)"
               value={sourceUrl}
               onChange={(e) => setSourceUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && sourceUrl.trim() && !isCapturingUrl) {
+                  handleCaptureUrl();
+                }
+              }}
+              data-testid="source-url-input"
             />
+            <button
+              className="vp-btn"
+              disabled={isCapturingUrl || !sourceUrl.trim()}
+              onClick={handleCaptureUrl}
+              data-testid="capture-url-btn"
+            >
+              <Globe size={14} />
+              {isCapturingUrl ? 'Захват...' : 'Снять по URL'}
+            </button>
             <button
               className="vp-btn vp-btn-primary"
               onClick={() => imageInputRef.current?.click()}

@@ -71,7 +71,15 @@ interface EditorState {
     sourceUrl: string,
     sourceImage: string,
     width: number,
-    height: number
+    height: number,
+    initialDomElements?: Array<{
+      name: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      domMetadata?: Record<string, string>;
+    }>
   ) => Promise<void>;
   loadSnapshot: (snapshot: ProjectSnapshot) => void;
   closeProject: () => void;
@@ -235,7 +243,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   toggleDiffHighlights: () => set((s) => ({ showDiffHighlights: !s.showDiffHighlights })),
   setSelectedIds: (ids) => set({ selectedIds: ids }),
 
-  createProjectFromImage: async (name, sourceUrl, sourceImage, width, height) => {
+  createProjectFromImage: async (
+    name,
+    sourceUrl,
+    sourceImage,
+    width,
+    height,
+    initialDomElements
+  ) => {
     const now = new Date().toISOString();
     const project: Project = {
       id: uid('proj'),
@@ -248,9 +263,50 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       updatedAt: now,
       schemaVersion: 1,
     };
+
+    const initialElements: VisualElement[] = [];
+    if (initialDomElements && initialDomElements.length > 0) {
+      for (let i = 0; i < initialDomElements.length; i++) {
+        const item = initialDomElements[i];
+        const crop = {
+          x: Math.round(item.x),
+          y: Math.round(item.y),
+          width: Math.round(item.width),
+          height: Math.round(item.height),
+        };
+        if (crop.width < 12 || crop.height < 10) continue;
+        const [imageDataUrl, patch] = await Promise.all([
+          cropImageRegion(sourceImage, crop),
+          createBackgroundPatchDataUrl(sourceImage, crop, 'sample'),
+        ]);
+        initialElements.push({
+          id: uid('el'),
+          projectId: project.id,
+          parentId: null,
+          type: 'raster',
+          name: item.name,
+          x: crop.x,
+          y: crop.y,
+          width: crop.width,
+          height: crop.height,
+          rotation: 0,
+          zIndex: i + 1,
+          visible: true,
+          locked: false,
+          styles: { opacity: 1 },
+          sourceCrop: crop,
+          imageDataUrl,
+          bgRestoreMode: 'sample',
+          bgRestoreColor: patch.dominantColor,
+          bgRestoreDataUrl: patch.dataUrl,
+          domMetadata: item.domMetadata,
+        });
+      }
+    }
+
     set({
       project,
-      elements: [],
+      elements: initialElements,
       operations: [],
       comments: [],
       undoStack: [],
@@ -261,11 +317,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       compareMode: 'after',
       zoom: 1,
       pan: { x: 0, y: 0 },
-      notice: null,
+      notice:
+        initialElements.length > 0
+          ? `Страница захвачена: извлечено ${initialElements.length} DOM-элементов с CSS-селекторами.`
+          : null,
     });
     await saveProjectSnapshot({
       project,
-      elements: [],
+      elements: initialElements,
       operations: [],
       comments: [],
     });
