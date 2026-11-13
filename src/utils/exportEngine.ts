@@ -37,6 +37,7 @@ export async function renderResultDataUrl(
   // 1. Draw background restoration patches for moved/deleted/hidden raster elements
   for (const el of elements) {
     if (el.type === 'raster' && el.sourceCrop && hasRasterMovedOrHidden(el)) {
+      if (el.bgRestoreMode === 'none') continue;
       const { x, y, width, height } = el.sourceCrop;
       if (el.bgRestoreMode === 'solid') {
         ctx.fillStyle = el.bgRestoreColor || '#ffffff';

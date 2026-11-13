@@ -175,7 +175,7 @@ export const StartScreen: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
         padding: '24px 16px',
         background: 'var(--bg-app)',
       }}
@@ -197,7 +197,7 @@ export const StartScreen: React.FC = () => {
         }
       }}
     >
-      <div style={{ width: '100%', maxWidth: 820 }}>
+      <div style={{ width: '100%', maxWidth: 820, margin: 'auto 0' }}>
         <div
           style={{
             display: 'flex',

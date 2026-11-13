@@ -90,7 +90,7 @@ const RasterNode: React.FC<{
 
 const BgPatchNode: React.FC<{ el: VisualElement }> = ({ el }) => {
   const patchImg = useHtmlImage(el.bgRestoreDataUrl);
-  if (!el.sourceCrop) return null;
+  if (!el.sourceCrop || el.bgRestoreMode === 'none') return null;
   const { x, y, width, height } = el.sourceCrop;
 
   if (el.bgRestoreMode === 'solid' || !patchImg) {
@@ -151,6 +151,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
   const updateElementProps = useEditorStore((s) => s.updateElementProps);
   const deleteSelected = useEditorStore((s) => s.deleteSelected);
   const duplicateSelected = useEditorStore((s) => s.duplicateSelected);
+  const updateBgRestore = useEditorStore((s) => s.updateBgRestore);
   const addComment = useEditorStore((s) => s.addComment);
 
   const stageRef = useRef<Konva.Stage>(null);
@@ -1043,7 +1044,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
         </div>
       )}
 
-      {/* Compact Floating Action Bar on Single Selection */}
+      {/* Compact Floating Action Bar under Selected Element */}
       {singleSelected && compareMode !== 'before' && !inlineEdit && (
         <div
           data-testid="floating-action-bar"
@@ -1051,15 +1052,22 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
             position: 'absolute',
             left: Math.max(
               12,
-              Math.min(size.width - 320, singleSelected.x * zoom + pan.x)
+              Math.min(size.width - 420, singleSelected.x * zoom + pan.x)
             ),
-            top: Math.max(10, singleSelected.y * zoom + pan.y - 40),
+            top: Math.max(
+              10,
+              Math.min(
+                size.height - 46,
+                (singleSelected.y + singleSelected.height) * zoom + pan.y + 10
+              )
+            ),
             background: 'var(--bg-panel-elevated)',
             border: '1px solid var(--border-strong)',
             borderRadius: 8,
             padding: '4px 6px',
             display: 'flex',
             alignItems: 'center',
+            flexWrap: 'wrap',
             gap: 4,
             boxShadow: '0 8px 20px rgba(0,0,0,0.45)',
             zIndex: 28,
@@ -1083,6 +1091,47 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
             <Maximize size={12} />
             Размер
           </button>
+          {singleSelected.type === 'raster' && singleSelected.sourceCrop && (
+            <>
+              <div className="vp-divider" style={{ height: 14 }} />
+              <button
+                className={`vp-btn ${
+                  (singleSelected.bgRestoreMode || 'sample') !== 'none'
+                    ? 'vp-btn-active'
+                    : ''
+                }`}
+                style={{ height: 24, padding: '0 6px', fontSize: 11 }}
+                title="Восстановить/заменить фон под вырезанным элементом"
+                onClick={() => updateBgRestore(singleSelected.id, 'sample')}
+                data-testid="fab-bg-replace"
+              >
+                Фон: Авто
+              </button>
+              <button
+                className={`vp-btn ${
+                  singleSelected.bgRestoreMode === 'solid' ? 'vp-btn-active' : ''
+                }`}
+                style={{ height: 24, padding: '0 6px', fontSize: 11 }}
+                title="Залить исходную область фоновым цветом"
+                onClick={() => updateBgRestore(singleSelected.id, 'solid')}
+                data-testid="fab-bg-solid"
+              >
+                Цвет
+              </button>
+              <button
+                className={`vp-btn ${
+                  singleSelected.bgRestoreMode === 'none' ? 'vp-btn-active' : ''
+                }`}
+                style={{ height: 24, padding: '0 6px', fontSize: 11 }}
+                title="Не менять фон под исходной позицией"
+                onClick={() => updateBgRestore(singleSelected.id, 'none')}
+                data-testid="fab-bg-none"
+              >
+                Не менять
+              </button>
+              <div className="vp-divider" style={{ height: 14 }} />
+            </>
+          )}
           {(singleSelected.type === 'text' || singleSelected.type === 'button') && (
             <button
               className="vp-btn"

@@ -338,6 +338,7 @@ export const RightInspector: React.FC = () => {
                     >
                       <option value="sample">Адаптивное восстановление</option>
                       <option value="solid">Заливка цветом</option>
+                      <option value="none">Не заменять фон</option>
                       <option value="ai">Локальный AI-inpainting</option>
                     </select>
                     {single.bgRestoreMode === 'solid' && (

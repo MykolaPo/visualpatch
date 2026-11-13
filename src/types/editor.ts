@@ -7,7 +7,7 @@ export type ElementType =
   | 'container'
   | 'group';
 
-export type BgRestoreMode = 'sample' | 'solid' | 'ai';
+export type BgRestoreMode = 'sample' | 'solid' | 'ai' | 'none';
 
 export type ToolType =
   | 'select'

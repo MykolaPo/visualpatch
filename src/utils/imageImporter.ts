@@ -139,6 +139,10 @@ export async function createBackgroundPatchDataUrl(
   mode: BgRestoreMode,
   solidColor?: string
 ): Promise<{ dataUrl: string; dominantColor: string; isComplexBg: boolean }> {
+  if (mode === 'none') {
+    return { dataUrl: '', dominantColor: 'transparent', isComplexBg: false };
+  }
+
   const img = await loadImage(sourceImageUrl);
   const sx = Math.max(0, Math.round(crop.x));
   const sy = Math.max(0, Math.round(crop.y));
