@@ -296,10 +296,35 @@ app.post('/api/capture-url', async (req, res) => {
         });
       }
 
+      // Deduplicate overlapping DOM elements (e.g. <a> wrapping <img> or nested wrappers)
+      const deduped: typeof items = [];
+      for (const item of items) {
+        const overlappingIdx = deduped.findIndex((existing) => {
+          const x1 = Math.max(existing.x, item.x);
+          const y1 = Math.max(existing.y, item.y);
+          const x2 = Math.min(existing.x + existing.width, item.x + item.width);
+          const y2 = Math.min(existing.y + existing.height, item.y + item.height);
+          if (x2 <= x1 || y2 <= y1) return false;
+          const inter = (x2 - x1) * (y2 - y1);
+          const union = existing.width * existing.height + item.width * item.height - inter;
+          return union > 0 && inter / union > 0.6;
+        });
+
+        if (overlappingIdx === -1) {
+          deduped.push(item);
+        } else {
+          // Prefer more specific leaf tags (img, button, input) over <a> wrapper
+          const cur = deduped[overlappingIdx];
+          if (cur.tag === 'a' && item.tag !== 'a') {
+            deduped[overlappingIdx] = item;
+          }
+        }
+      }
+
       return {
         title: document.title || location.hostname,
         finalUrl: location.href,
-        elements: items.slice(0, 45),
+        elements: deduped.slice(0, 45),
       };
     });
 

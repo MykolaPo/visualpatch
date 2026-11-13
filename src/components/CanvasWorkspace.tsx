@@ -1096,7 +1096,8 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
               <div className="vp-divider" style={{ height: 14 }} />
               <button
                 className={`vp-btn ${
-                  (singleSelected.bgRestoreMode || 'sample') !== 'none'
+                  (singleSelected.bgRestoreMode || 'sample') === 'sample' ||
+                  singleSelected.bgRestoreMode === 'ai'
                     ? 'vp-btn-active'
                     : ''
                 }`}
@@ -1118,6 +1119,25 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
               >
                 Цвет
               </button>
+              {singleSelected.bgRestoreMode === 'solid' && (
+                <input
+                  type="color"
+                  title="Выбрать цвет заливки фона"
+                  value={singleSelected.bgRestoreColor || '#ffffff'}
+                  onChange={(e) =>
+                    updateBgRestore(singleSelected.id, 'solid', e.target.value)
+                  }
+                  style={{
+                    width: 22,
+                    height: 22,
+                    padding: 0,
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                />
+              )}
               <button
                 className={`vp-btn ${
                   singleSelected.bgRestoreMode === 'none' ? 'vp-btn-active' : ''
