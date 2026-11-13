@@ -136,6 +136,8 @@ export const App: React.FC = () => {
         const k = e.key.toLowerCase();
         if (k === 'v') setActiveTool('select');
         else if (k === 'h') setActiveTool('hand');
+        else if (k === 'm') setActiveTool('smart-brush');
+        else if (k === 'l') setActiveTool('lasso');
         else if (k === 'r') setActiveTool('crop');
         else if (k === 't') setActiveTool('text');
         else if (k === 'b') setActiveTool('rect');

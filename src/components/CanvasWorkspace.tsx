@@ -21,6 +21,11 @@ import {
 } from 'lucide-react';
 import { useEditorStore } from '../store/useEditorStore';
 import type { VisualElement } from '../types/editor';
+import {
+  cropPolygonRegion,
+  findSmartElementBounds,
+  type Point,
+} from '../utils/smartSelect';
 
 function useHtmlImage(src?: string): HTMLImageElement | null {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -170,6 +175,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
     width: number;
     height: number;
   } | null>(null);
+  const [freehandPoints, setFreehandPoints] = useState<Point[] | null>(null);
   const [inlineEdit, setInlineEdit] = useState<{
     id: string;
     value: string;
@@ -307,6 +313,11 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
       return;
     }
 
+    if (activeTool === 'smart-brush' || activeTool === 'lasso') {
+      setFreehandPoints([{ x: pt.x, y: pt.y }]);
+      return;
+    }
+
     if (activeTool === 'text') {
       createNativeElement('text', pt.x, pt.y, 180, 34, 'Новый текст');
       return;
@@ -344,6 +355,11 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
     const pt = getPointerInCanvas();
     if (!pt) return;
 
+    if (freehandPoints) {
+      setFreehandPoints((prev) => (prev ? [...prev, { x: pt.x, y: pt.y }] : null));
+      return;
+    }
+
     if (marquee) {
       const x = Math.min(marquee.startX, pt.x);
       const y = Math.min(marquee.startY, pt.y);
@@ -362,6 +378,31 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
   };
 
   const handleStageMouseUp = async () => {
+    if (freehandPoints) {
+      const pts = freehandPoints;
+      setFreehandPoints(null);
+      if (pts.length < 2) return;
+
+      if (activeTool === 'smart-brush') {
+        const smartCrop = await findSmartElementBounds(project.sourceImage, pts);
+        if (smartCrop) {
+          await createRasterElement(smartCrop, 'Умный фрагмент');
+        }
+      } else if (activeTool === 'lasso') {
+        const poly = await cropPolygonRegion(project.sourceImage, pts);
+        if (poly) {
+          await createRasterElement(
+            poly.crop,
+            'Лассо-фрагмент',
+            'raster',
+            undefined,
+            poly.imageDataUrl
+          );
+        }
+      }
+      return;
+    }
+
     if (marquee) {
       const box = marquee;
       setMarquee(null);
@@ -729,7 +770,11 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
         background: '#090b0f',
         cursor: isPanMode
           ? 'grab'
-          : activeTool === 'crop' || activeTool === 'rect' || activeTool === 'comment'
+          : activeTool === 'crop' ||
+            activeTool === 'rect' ||
+            activeTool === 'comment' ||
+            activeTool === 'smart-brush' ||
+            activeTool === 'lasso'
           ? 'crosshair'
           : 'default',
       }}
@@ -888,6 +933,20 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
               strokeWidth={1.2 / zoom}
               fill="rgba(99,102,241,0.12)"
               dash={[4, 3]}
+              listening={false}
+            />
+          )}
+
+          {freehandPoints && freehandPoints.length >= 2 && (
+            <Line
+              points={freehandPoints.flatMap((p) => [p.x, p.y])}
+              stroke={activeTool === 'smart-brush' ? '#10b981' : '#6366f1'}
+              strokeWidth={(activeTool === 'smart-brush' ? 14 : 2) / zoom}
+              opacity={activeTool === 'smart-brush' ? 0.45 : 0.95}
+              lineCap="round"
+              lineJoin="round"
+              closed={activeTool === 'lasso'}
+              fill={activeTool === 'lasso' ? 'rgba(99,102,241,0.15)' : undefined}
               listening={false}
             />
           )}

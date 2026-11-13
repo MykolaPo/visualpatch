@@ -89,7 +89,8 @@ interface EditorState {
     crop: SourceCrop,
     name?: string,
     type?: ElementType,
-    confidence?: number
+    confidence?: number,
+    customImageDataUrl?: string
   ) => Promise<VisualElement | null>;
   createNativeElement: (
     type: ElementType,
@@ -375,12 +376,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
 
-  createRasterElement: async (crop, name, _type, confidence) => {
+  createRasterElement: async (crop, name, _type, confidence, customImageDataUrl) => {
     const state = get();
     if (!state.project) return null;
     if (crop.width < 4 || crop.height < 4) return null;
 
-    const imageDataUrl = await cropImageRegion(state.project.sourceImage, crop);
+    const imageDataUrl =
+      customImageDataUrl || (await cropImageRegion(state.project.sourceImage, crop));
     const patch = await createBackgroundPatchDataUrl(
       state.project.sourceImage,
       crop,

@@ -13,6 +13,8 @@ export type ToolType =
   | 'select'
   | 'hand'
   | 'crop'
+  | 'smart-brush'
+  | 'lasso'
   | 'text'
   | 'rect'
   | 'image'
