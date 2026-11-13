@@ -152,6 +152,48 @@ app.post('/api/capture-url', async (req, res) => {
       return;
     }
 
+    // Dismiss common cookie / GDPR consent banners before capturing screenshot
+    const dismissedCookie = await page.evaluate(() => {
+      const acceptSelectors = [
+        '#onetrust-accept-btn-handler',
+        '.CybotCookiebotDialogBodyButtonAccept',
+        '[id*="cookie" i] button[class*="accept" i]',
+        '[class*="cookie" i] button[class*="accept" i]',
+      ];
+      for (const sel of acceptSelectors) {
+        const btn = document.querySelector(sel) as HTMLElement | null;
+        if (btn && btn.offsetParent !== null) {
+          btn.click();
+          return true;
+        }
+      }
+
+      const textMatch = /^(прийняти все|принять все|accept all|allow all|agree|необхідні|только необходимые|ок|ok|got it)$/i;
+      const buttons = Array.from(document.querySelectorAll('button, a[role="button"]'));
+      for (const b of buttons) {
+        const txt = ((b as HTMLElement).innerText || '').trim();
+        if (textMatch.test(txt) && (b as HTMLElement).offsetParent !== null) {
+          (b as HTMLElement).click();
+          return true;
+        }
+      }
+
+      let hid = false;
+      const overlays = Array.from(document.querySelectorAll('[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i], [id*="onetrust" i]'));
+      for (const el of overlays) {
+        const st = window.getComputedStyle(el);
+        if (st.position === 'fixed' || st.position === 'sticky') {
+          (el as HTMLElement).style.setProperty('display', 'none', 'important');
+          hid = true;
+        }
+      }
+      return hid;
+    });
+
+    if (dismissedCookie) {
+      await new Promise((r) => setTimeout(r, 450));
+    }
+
     const pageInfo = await page.evaluate(() => {
       const candidates = Array.from(
         document.querySelectorAll(
