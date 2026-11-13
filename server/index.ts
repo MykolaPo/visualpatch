@@ -140,10 +140,17 @@ app.post('/api/capture-url', async (req, res) => {
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
     page.on('dialog', (d) => d.dismiss().catch(() => {}));
 
-    await page.goto(targetUrl.toString(), {
+    const response = await page.goto(targetUrl.toString(), {
       waitUntil: 'networkidle2',
       timeout: 20000,
     });
+
+    if (response && response.status() >= 400) {
+      res.status(422).json({
+        error: `Сайт вернул HTTP ${response.status()} (${response.statusText() || 'доступ ограничен'}). Для защищённых сайтов используйте Chrome-расширение из папки extension/ или вставьте скриншот через Ctrl+V.`,
+      });
+      return;
+    }
 
     const pageInfo = await page.evaluate(() => {
       const candidates = Array.from(
