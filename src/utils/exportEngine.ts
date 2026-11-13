@@ -292,15 +292,30 @@ function dataUrlToBase64(dataUrl: string): string {
   return idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
 }
 
+async function ensurePngDataUrl(dataUrl: string): Promise<string> {
+  if (dataUrl.startsWith('data:image/png')) return dataUrl;
+  const img = await loadImage(dataUrl);
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
 export async function exportProjectZipBlob(snapshot: ProjectSnapshot): Promise<Blob> {
   const zip = new JSZip();
   const { project, elements, operations, comments } = snapshot;
 
-  const resultDataUrl = await renderResultDataUrl(project, elements);
+  const [originalPngUrl, resultDataUrl] = await Promise.all([
+    ensurePngDataUrl(project.sourceImage),
+    renderResultDataUrl(project, elements),
+  ]);
   const taskMd = generateMarkdownSpec(project, elements, operations, comments);
   const changes = buildChangesJson(project, elements, operations, comments);
 
-  zip.file('original.png', dataUrlToBase64(project.sourceImage), { base64: true });
+  zip.file('original.png', dataUrlToBase64(originalPngUrl), { base64: true });
   zip.file('result.png', dataUrlToBase64(resultDataUrl), { base64: true });
   zip.file('changes.json', JSON.stringify(changes, null, 2));
   zip.file('task.md', taskMd);

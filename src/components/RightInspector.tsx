@@ -339,7 +339,7 @@ export const RightInspector: React.FC = () => {
                       <option value="sample">Адаптивное восстановление</option>
                       <option value="solid">Заливка цветом</option>
                       <option value="none">Не заменять фон</option>
-                      <option value="ai">Локальный AI-inpainting</option>
+                      <option value="ai">Усиленное сэмплирование</option>
                     </select>
                     {single.bgRestoreMode === 'solid' && (
                       <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -493,25 +493,54 @@ export const RightInspector: React.FC = () => {
                 История операций пуста.
               </div>
             ) : (
-              [...operations].reverse().map((op) => (
-                <div
-                  key={op.id}
-                  style={{
-                    padding: '6px 8px',
-                    borderRadius: 6,
-                    background: 'var(--bg-panel-elevated)',
-                    border: '1px solid var(--border)',
-                    fontSize: 11,
-                  }}
-                >
-                  <div style={{ fontWeight: 600, color: '#c7d2fe' }}>
-                    {op.type} · {op.elementName || op.elementId}
+              [...operations].reverse().map((op) => {
+                const name = op.elementName || op.elementId;
+                const a = op.after as Record<string, unknown> | null;
+                const b = op.before as Record<string, unknown> | null;
+                const label =
+                  op.type === 'MOVE'
+                    ? `Перемещён «${name}» (${a?.x}, ${a?.y})`
+                    : op.type === 'RESIZE'
+                    ? `Изменён размер «${name}» (${a?.width}×${a?.height})`
+                    : op.type === 'CREATE'
+                    ? `Создан «${name}»`
+                    : op.type === 'DELETE'
+                    ? `Удалён «${name}»`
+                    : op.type === 'HIDE'
+                    ? `${a?.visible ? 'Показан' : 'Скрыт'} «${name}»`
+                    : op.type === 'DUPLICATE'
+                    ? `Дублирован «${name}»`
+                    : op.type === 'EDIT_TEXT'
+                    ? `Изменён текст «${name}»`
+                    : op.type === 'GROUP'
+                    ? `Сгруппированы элементы в «${name}»`
+                    : op.type === 'UNGROUP'
+                    ? `Разгруппирован «${name}»`
+                    : op.type === 'ADD_COMMENT'
+                    ? `Комментарий к «${name}»`
+                    : op.type === 'CHANGE_ORDER'
+                    ? `Изменён слой «${name}» (${b?.zIndex} → ${a?.zIndex})`
+                    : `Обновлён стиль «${name}»`;
+                return (
+                  <div
+                    key={op.id}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: 6,
+                      background: 'var(--bg-panel-elevated)',
+                      border: '1px solid var(--border)',
+                      fontSize: 11,
+                    }}
+                  >
+                    <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                      {label}
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
+                      {new Date(op.timestamp).toLocaleTimeString('ru-RU')}
+                    </div>
                   </div>
-                  <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>
-                    {new Date(op.timestamp).toLocaleTimeString('ru-RU')}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

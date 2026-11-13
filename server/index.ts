@@ -9,9 +9,39 @@ import puppeteer from 'puppeteer-core';
 
 const app = express();
 const PORT = Number(process.env.PORT || 3100);
+const ALLOWED_ORIGINS = (
+  process.env.ALLOWED_ORIGINS ||
+  'http://localhost:3100,http://localhost:5173,http://127.0.0.1:3100,http://127.0.0.1:5173'
+)
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const API_KEY = process.env.VISUALPATCH_API_KEY || '';
 
-app.use(cors());
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('CORS origin not allowed'));
+      }
+    },
+  })
+);
 app.use(express.json({ limit: '30mb' }));
+
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  if (!API_KEY) return next();
+  const authHeader = req.headers.authorization || '';
+  const headerKey = String(req.headers['x-api-key'] || '');
+  const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (bearer === API_KEY || headerKey === API_KEY) {
+    return next();
+  }
+  res.status(401).json({ error: 'Unauthorized: invalid or missing API key' });
+});
 
 interface DispatchRecord {
   dispatchId: string;
@@ -22,12 +52,61 @@ interface DispatchRecord {
   title: string;
   status: 'delivered' | 'queued_local' | 'completed' | 'accepted' | 'needs_revision';
   externalUrl?: string;
+  artifactUrls?: {
+    original?: string;
+    result?: string;
+  };
   reviewNote?: string;
   createdAt: string;
   updatedAt?: string;
 }
 
-const dispatchStore = new Map<string, DispatchRecord>();
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const DISPATCHES_FILE = path.join(DATA_DIR, 'dispatches.json');
+const ARTIFACTS_DIR = path.join(DATA_DIR, 'artifacts');
+
+function loadDispatches(): Map<string, DispatchRecord> {
+  const map = new Map<string, DispatchRecord>();
+  try {
+    if (fs.existsSync(DISPATCHES_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(DISPATCHES_FILE, 'utf-8')) as DispatchRecord[];
+      for (const rec of raw) {
+        map.set(rec.idempotencyKey, rec);
+      }
+    }
+  } catch {
+    // ignore corrupt local file
+  }
+  return map;
+}
+
+function persistDispatches(map: Map<string, DispatchRecord>) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(
+      DISPATCHES_FILE,
+      JSON.stringify(Array.from(map.values()), null, 2),
+      'utf-8'
+    );
+  } catch {
+    // ignore disk write error
+  }
+}
+
+function saveDataUrlArtifact(dispatchId: string, filename: string, dataUrl?: string): string | undefined {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.includes(',')) return undefined;
+  try {
+    const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const dir = path.join(ARTIFACTS_DIR, dispatchId);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, filename), Buffer.from(base64, 'base64'));
+    return `/api/control-room/dispatches/${dispatchId}/artifacts/${filename}`;
+  } catch {
+    return undefined;
+  }
+}
+
+const dispatchStore = loadDispatches();
 
 app.get('/health', (_req, res) => {
   res.status(200).json({
@@ -139,6 +218,19 @@ app.post('/api/capture-url', async (req, res) => {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
     page.on('dialog', (d) => d.dismiss().catch(() => {}));
+
+    // Validate redirects and sub-frame navigations against SSRF
+    await page.setRequestInterception(true);
+    page.on('request', async (interceptedReq) => {
+      try {
+        if (interceptedReq.isNavigationRequest()) {
+          await validatePublicHttpUrl(interceptedReq.url());
+        }
+        await interceptedReq.continue();
+      } catch {
+        await interceptedReq.abort('accessdenied').catch(() => {});
+      }
+    });
 
     const response = await page.goto(targetUrl.toString(), {
       waitUntil: 'networkidle2',
@@ -377,6 +469,7 @@ app.post('/api/control-room/dispatch', async (req, res) => {
       comments,
       sourceUrl,
       acceptanceCriteria,
+      attachments,
       controlRoomEndpoint,
       apiToken,
     } = req.body ?? {};
@@ -397,6 +490,10 @@ app.post('/api/control-room/dispatch', async (req, res) => {
     }
 
     const dispatchId = `vp-task-${crypto.randomUUID().slice(0, 8)}`;
+    const originalUrl = saveDataUrlArtifact(dispatchId, 'original.png', attachments?.originalImage);
+    const resultUrl = saveDataUrlArtifact(dispatchId, 'result.png', attachments?.resultImage);
+    const artifactUrls =
+      originalUrl || resultUrl ? { original: originalUrl, result: resultUrl } : undefined;
 
     if (controlRoomEndpoint && typeof controlRoomEndpoint === 'string' && controlRoomEndpoint.trim()) {
       const endpoint = controlRoomEndpoint.trim();
@@ -425,6 +522,8 @@ app.post('/api/control-room/dispatch', async (req, res) => {
           operations: Array.isArray(operations) ? operations : [],
           comments: Array.isArray(comments) ? comments : [],
           acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [],
+          attachments: attachments || undefined,
+          artifactUrls,
         }),
       });
 
@@ -448,9 +547,11 @@ app.post('/api/control-room/dispatch', async (req, res) => {
         title,
         status: 'delivered',
         externalUrl: typeof data.url === 'string' ? data.url : undefined,
+        artifactUrls,
         createdAt: new Date().toISOString(),
       };
       dispatchStore.set(dedupeKey, record);
+      persistDispatches(dispatchStore);
       res.status(201).json(record);
       return;
     }
@@ -464,9 +565,11 @@ app.post('/api/control-room/dispatch', async (req, res) => {
       title,
       status: 'queued_local',
       externalUrl: `#/tasks/${dispatchId}`,
+      artifactUrls,
       createdAt: new Date().toISOString(),
     };
     dispatchStore.set(dedupeKey, record);
+    persistDispatches(dispatchStore);
     res.status(201).json(record);
   } catch (err) {
     res.status(500).json({
@@ -503,7 +606,19 @@ app.post('/api/control-room/dispatches/:dispatchId/review', (req, res) => {
   found.status = accepted ? 'accepted' : 'needs_revision';
   found.reviewNote = typeof reviewNote === 'string' ? reviewNote : undefined;
   found.updatedAt = new Date().toISOString();
+  persistDispatches(dispatchStore);
   res.status(200).json(found);
+});
+
+app.get('/api/control-room/dispatches/:dispatchId/artifacts/:filename', (req, res) => {
+  const safeId = path.basename(req.params.dispatchId);
+  const safeFile = path.basename(req.params.filename);
+  const filePath = path.join(ARTIFACTS_DIR, safeId, safeFile);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: 'Artifact not found' });
+    return;
+  }
+  res.sendFile(filePath);
 });
 
 const distDir = path.resolve(process.cwd(), 'dist');

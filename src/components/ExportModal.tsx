@@ -190,6 +190,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setCrResult({ status: 'idle', message: '' });
     try {
       const idempotencyKey = `${project.id}-${operations.length}-${comments.length}`;
+      const resultImage = await renderResultDataUrl(project, elements);
+      const changesJson = buildChangesJson(project, elements, operations, comments);
       const res = await fetch('/api/control-room/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -203,6 +205,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           sourceUrl: project.sourceUrl,
           operations,
           comments,
+          attachments: {
+            originalImage: project.sourceImage,
+            resultImage,
+            changesJson,
+          },
           acceptanceCriteria: [
             'Визуальное соответствие итоговому макету result.png',
             'Сохранение исходных цветов и шрифтов там, где не указано иное',
