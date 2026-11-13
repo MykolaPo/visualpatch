@@ -13,6 +13,7 @@ import {
   MessageSquare,
   MousePointer2,
   ScanSearch,
+  Scissors,
   Square,
   Type,
   Unlock,
@@ -41,10 +42,13 @@ export const LeftToolbar: React.FC = () => {
   const setDetectedRegions = useEditorStore((s) => s.setDetectedRegions);
   const acceptDetectedRegion = useEditorStore((s) => s.acceptDetectedRegion);
   const dismissDetectedRegion = useEditorStore((s) => s.dismissDetectedRegion);
+  const mergeDetectedRegions = useEditorStore((s) => s.mergeDetectedRegions);
+  const splitDetectedRegion = useEditorStore((s) => s.splitDetectedRegion);
   const acceptAllDetected = useEditorStore((s) => s.acceptAllDetected);
   const setNotice = useEditorStore((s) => s.setNotice);
 
   const [showLayers, setShowLayers] = useState(false);
+  const [selectedDetectedIds, setSelectedDetectedIds] = useState<string[]>([]);
   const imgInputRef = useRef<HTMLInputElement>(null);
 
   if (!project) return null;
@@ -238,6 +242,18 @@ export const LeftToolbar: React.FC = () => {
                 >
                   <span>Найдено: {detectedRegions.length}</span>
                   <div style={{ display: 'flex', gap: 4 }}>
+                    {selectedDetectedIds.length >= 2 && (
+                      <button
+                        className="vp-btn"
+                        style={{ height: 22, padding: '0 6px', fontSize: 11 }}
+                        onClick={() => {
+                          mergeDetectedRegions(selectedDetectedIds);
+                          setSelectedDetectedIds([]);
+                        }}
+                      >
+                        Объединить
+                      </button>
+                    )}
                     <button
                       className="vp-btn vp-btn-primary"
                       style={{ height: 22, padding: '0 6px', fontSize: 11 }}
@@ -248,54 +264,95 @@ export const LeftToolbar: React.FC = () => {
                     <button
                       className="vp-btn"
                       style={{ height: 22, padding: '0 6px', fontSize: 11 }}
-                      onClick={() => setDetectedRegions([])}
+                      onClick={() => {
+                        setDetectedRegions([]);
+                        setSelectedDetectedIds([]);
+                      }}
                     >
                       Скрыть
                     </button>
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
-                  {detectedRegions.map((reg) => (
-                    <div
-                      key={reg.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 4,
-                        padding: '4px 6px',
-                        borderRadius: 5,
-                        background: 'var(--bg-panel)',
-                        fontSize: 11,
-                      }}
-                    >
-                      <div style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {reg.suggestedName}{' '}
-                        <span style={{ color: 'var(--text-muted)' }}>
-                          {Math.round(reg.confidence * 100)}%
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                        <button
-                          className="vp-btn vp-btn-icon"
-                          style={{ width: 20, height: 20 }}
-                          title="Подтвердить элемент"
-                          onClick={() => acceptDetectedRegion(reg.id)}
+                <div style={{ display: 'grid', gap: 4, maxHeight: 200, overflowY: 'auto' }}>
+                  {detectedRegions.map((reg) => {
+                    const checked = selectedDetectedIds.includes(reg.id);
+                    return (
+                      <div
+                        key={reg.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 4,
+                          padding: '4px 6px',
+                          borderRadius: 5,
+                          background: 'var(--bg-panel)',
+                          fontSize: 11,
+                        }}
+                      >
+                        <label
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            minWidth: 0,
+                            cursor: 'pointer',
+                          }}
                         >
-                          <Check size={11} />
-                        </button>
-                        <button
-                          className="vp-btn vp-btn-icon"
-                          style={{ width: 20, height: 20 }}
-                          title="Отклонить"
-                          onClick={() => dismissDetectedRegion(reg.id)}
-                        >
-                          <X size={11} />
-                        </button>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) =>
+                              setSelectedDetectedIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, reg.id]
+                                  : prev.filter((id) => id !== reg.id)
+                              )
+                            }
+                          />
+                          <span
+                            style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {reg.suggestedName}{' '}
+                            <span style={{ color: 'var(--text-muted)' }}>
+                              {Math.round(reg.confidence * 100)}%
+                            </span>
+                          </span>
+                        </label>
+                        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                          <button
+                            className="vp-btn vp-btn-icon"
+                            style={{ width: 20, height: 20 }}
+                            title="Разделить блок пополам"
+                            onClick={() => splitDetectedRegion(reg.id)}
+                          >
+                            <Scissors size={11} />
+                          </button>
+                          <button
+                            className="vp-btn vp-btn-icon"
+                            style={{ width: 20, height: 20 }}
+                            title="Подтвердить элемент"
+                            onClick={() => acceptDetectedRegion(reg.id)}
+                          >
+                            <Check size={11} />
+                          </button>
+                          <button
+                            className="vp-btn vp-btn-icon"
+                            style={{ width: 20, height: 20 }}
+                            title="Отклонить"
+                            onClick={() => dismissDetectedRegion(reg.id)}
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

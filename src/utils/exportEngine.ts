@@ -208,11 +208,12 @@ export function generateMarkdownSpec(
     '',
     `## 3. Перечень элементов (${activeElements.length} активных, ${deletedElements.length} удалённых)`,
     '',
-    '| ID | Название | Тип | Позиция (X, Y) | Размер (W × H) | Статус |',
+    '| ID | Название | Тип | Позиция (X, Y) | Размер (W × H) | CSS-селектор / Статус |',
     '|---|---|---|---|---|---|',
     ...elements.map((el) => {
       const status = el.deleted ? 'Удалён' : el.visible ? 'Активен' : 'Скрыт';
-      return `| \`${el.id}\` | ${el.name} | \`${el.type}\` | ${Math.round(el.x)}, ${Math.round(el.y)} | ${Math.round(el.width)} × ${Math.round(el.height)} | ${status} |`;
+      const selector = el.domMetadata?.selector ? `\`${el.domMetadata.selector}\` · ` : '';
+      return `| \`${el.id}\` | ${el.name} | \`${el.type}\` | ${Math.round(el.x)}, ${Math.round(el.y)} | ${Math.round(el.width)} × ${Math.round(el.height)} | ${selector}${status} |`;
     }),
     '',
     `## 4. Детальное описание операций (${operations.length})`,

@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "VisualPatch Capture",
+  "version": "1.0.0",
+  "description": "Захват скриншота страницы и геометрии DOM-элементов (включая Shadow DOM и iframe) для VisualPatch",
+  "permissions": ["activeTab", "scripting"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Захватить страницу в VisualPatch"
+  }
+}

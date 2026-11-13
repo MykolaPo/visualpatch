@@ -146,6 +146,8 @@ interface EditorState {
   setIsDetecting: (val: boolean) => void;
   acceptDetectedRegion: (regionId: string) => Promise<void>;
   dismissDetectedRegion: (regionId: string) => void;
+  mergeDetectedRegions: (regionIds: string[]) => void;
+  splitDetectedRegion: (regionId: string, axis?: 'horizontal' | 'vertical') => void;
   acceptAllDetected: () => Promise<void>;
 
   undo: () => void;
@@ -1232,6 +1234,90 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => ({
       detectedRegions: s.detectedRegions.filter((r) => r.id !== regionId),
     }));
+  },
+
+  mergeDetectedRegions: (regionIds) => {
+    set((s) => {
+      const targets = s.detectedRegions.filter((r) => regionIds.includes(r.id));
+      if (targets.length < 2) return s;
+      const minX = Math.min(...targets.map((r) => r.x));
+      const minY = Math.min(...targets.map((r) => r.y));
+      const maxX = Math.max(...targets.map((r) => r.x + r.width));
+      const maxY = Math.max(...targets.map((r) => r.y + r.height));
+      const avgConf =
+        targets.reduce((sum, r) => sum + r.confidence, 0) / targets.length;
+      const merged: DetectedRegion = {
+        id: `det_merged_${Date.now().toString(36)}`,
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+        confidence: Number(avgConf.toFixed(2)),
+        suggestedType: 'container',
+        suggestedName: `Объединённый блок (${targets.length})`,
+      };
+      const idSet = new Set(regionIds);
+      return {
+        detectedRegions: [
+          merged,
+          ...s.detectedRegions.filter((r) => !idSet.has(r.id)),
+        ],
+      };
+    });
+  },
+
+  splitDetectedRegion: (regionId, axis) => {
+    set((s) => {
+      const target = s.detectedRegions.find((r) => r.id === regionId);
+      if (!target) return s;
+      const splitAxis =
+        axis ?? (target.width >= target.height ? 'vertical' : 'horizontal');
+      if (splitAxis === 'vertical' && target.width >= 20) {
+        const w1 = Math.floor(target.width / 2);
+        const w2 = target.width - w1;
+        const left: DetectedRegion = {
+          ...target,
+          id: `${target.id}_a`,
+          width: w1,
+          suggestedName: `${target.suggestedName} (1)`,
+        };
+        const right: DetectedRegion = {
+          ...target,
+          id: `${target.id}_b`,
+          x: target.x + w1,
+          width: w2,
+          suggestedName: `${target.suggestedName} (2)`,
+        };
+        return {
+          detectedRegions: s.detectedRegions.flatMap((r) =>
+            r.id === regionId ? [left, right] : [r]
+          ),
+        };
+      }
+      if (target.height >= 20) {
+        const h1 = Math.floor(target.height / 2);
+        const h2 = target.height - h1;
+        const top: DetectedRegion = {
+          ...target,
+          id: `${target.id}_a`,
+          height: h1,
+          suggestedName: `${target.suggestedName} (1)`,
+        };
+        const bottom: DetectedRegion = {
+          ...target,
+          id: `${target.id}_b`,
+          y: target.y + h1,
+          height: h2,
+          suggestedName: `${target.suggestedName} (2)`,
+        };
+        return {
+          detectedRegions: s.detectedRegions.flatMap((r) =>
+            r.id === regionId ? [top, bottom] : [r]
+          ),
+        };
+      }
+      return s;
+    });
   },
 
   acceptAllDetected: async () => {

@@ -161,7 +161,15 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
     width: number;
     height: number;
   } | null>(null);
-  const [guides, setGuides] = useState<Array<{ points: number[] }>>([]);
+  const [guides, setGuides] = useState<Array<{ points: number[]; label?: string; lx?: number; ly?: number }>>([]);
+  const [marquee, setMarquee] = useState<{
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [inlineEdit, setInlineEdit] = useState<{
     id: string;
     value: string;
@@ -316,16 +324,36 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
       return;
     }
 
-    // Clicked empty background -> clear selection
+    // Clicked empty background -> start marquee selection
     if (e.target === stageRef.current || e.target.name() === 'vp-base-image') {
       setSelectedIds([]);
+      if (activeTool === 'select') {
+        setMarquee({
+          startX: pt.x,
+          startY: pt.y,
+          x: pt.x,
+          y: pt.y,
+          width: 0,
+          height: 0,
+        });
+      }
     }
   };
 
   const handleStageMouseMove = () => {
-    if (!drawBox) return;
     const pt = getPointerInCanvas();
     if (!pt) return;
+
+    if (marquee) {
+      const x = Math.min(marquee.startX, pt.x);
+      const y = Math.min(marquee.startY, pt.y);
+      const width = Math.abs(pt.x - marquee.startX);
+      const height = Math.abs(pt.y - marquee.startY);
+      setMarquee({ ...marquee, x, y, width, height });
+      return;
+    }
+
+    if (!drawBox) return;
     const x = Math.min(drawBox.startX, pt.x);
     const y = Math.min(drawBox.startY, pt.y);
     const width = Math.abs(pt.x - drawBox.startX);
@@ -334,6 +362,25 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
   };
 
   const handleStageMouseUp = async () => {
+    if (marquee) {
+      const box = marquee;
+      setMarquee(null);
+      if (box.width >= 6 && box.height >= 6) {
+        const hits = activeElements
+          .filter(
+            (el) =>
+              !el.locked &&
+              el.x < box.x + box.width &&
+              el.x + el.width > box.x &&
+              el.y < box.y + box.height &&
+              el.y + el.height > box.y
+          )
+          .map((el) => el.id);
+        if (hits.length > 0) setSelectedIds(hits);
+      }
+      return;
+    }
+
     if (!drawBox) return;
     const box = drawBox;
     setDrawBox(null);
@@ -369,7 +416,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
     let nx = node.x();
     let ny = node.y();
     const threshold = 6;
-    const nextGuides: Array<{ points: number[] }> = [];
+    const nextGuides: Array<{ points: number[]; label?: string; lx?: number; ly?: number }> = [];
 
     const xTargets = [0, project.canvasWidth / 2, project.canvasWidth];
     const yTargets = [0, project.canvasHeight / 2, project.canvasHeight];
@@ -404,6 +451,48 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
         break;
       }
     }
+
+    // Visible spacing distances (px) to nearest horizontal/vertical neighbor
+    let bestH: { dist: number; points: number[]; lx: number; ly: number } | null = null;
+    let bestV: { dist: number; points: number[]; lx: number; ly: number } | null = null;
+
+    for (const other of activeElements) {
+      if (other.id === el.id) continue;
+      const vOverlap = ny < other.y + other.height && ny + el.height > other.y;
+      if (vOverlap) {
+        const cy = Math.round((Math.max(ny, other.y) + Math.min(ny + el.height, other.y + other.height)) / 2);
+        if (nx >= other.x + other.width) {
+          const d = Math.round(nx - (other.x + other.width));
+          if (d > 0 && (!bestH || d < bestH.dist)) {
+            bestH = { dist: d, points: [other.x + other.width, cy, nx, cy], lx: (other.x + other.width + nx) / 2, ly: cy - 12 };
+          }
+        } else if (other.x >= nx + el.width) {
+          const d = Math.round(other.x - (nx + el.width));
+          if (d > 0 && (!bestH || d < bestH.dist)) {
+            bestH = { dist: d, points: [nx + el.width, cy, other.x, cy], lx: (nx + el.width + other.x) / 2, ly: cy - 12 };
+          }
+        }
+      }
+
+      const hOverlap = nx < other.x + other.width && nx + el.width > other.x;
+      if (hOverlap) {
+        const cx = Math.round((Math.max(nx, other.x) + Math.min(nx + el.width, other.x + other.width)) / 2);
+        if (ny >= other.y + other.height) {
+          const d = Math.round(ny - (other.y + other.height));
+          if (d > 0 && (!bestV || d < bestV.dist)) {
+            bestV = { dist: d, points: [cx, other.y + other.height, cx, ny], lx: cx + 6, ly: (other.y + other.height + ny) / 2 };
+          }
+        } else if (other.y >= ny + el.height) {
+          const d = Math.round(other.y - (ny + el.height));
+          if (d > 0 && (!bestV || d < bestV.dist)) {
+            bestV = { dist: d, points: [cx, ny + el.height, cx, other.y], lx: cx + 6, ly: (ny + el.height + other.y) / 2 };
+          }
+        }
+      }
+    }
+
+    if (bestH) nextGuides.push({ points: bestH.points, label: `${bestH.dist}px`, lx: bestH.lx, ly: bestH.ly });
+    if (bestV) nextGuides.push({ points: bestV.points, label: `${bestV.dist}px`, lx: bestV.lx, ly: bestV.ly });
 
     node.x(nx);
     node.y(ny);
@@ -769,15 +858,39 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
           ))}
 
           {guides.map((g, i) => (
-            <Line
-              key={`guide_${i}`}
-              points={g.points}
-              stroke="#ec4899"
+            <KonvaGroup key={`guide_${i}`} listening={false}>
+              <Line
+                points={g.points}
+                stroke="#ec4899"
+                strokeWidth={1.2 / zoom}
+                dash={[4, 3]}
+              />
+              {g.label && g.lx !== undefined && g.ly !== undefined && (
+                <KonvaText
+                  x={g.lx}
+                  y={g.ly}
+                  text={g.label}
+                  fontSize={11 / zoom}
+                  fontStyle="bold"
+                  fill="#ec4899"
+                />
+              )}
+            </KonvaGroup>
+          ))}
+
+          {marquee && (
+            <Rect
+              x={marquee.x}
+              y={marquee.y}
+              width={marquee.width}
+              height={marquee.height}
+              stroke="#6366f1"
               strokeWidth={1.2 / zoom}
+              fill="rgba(99,102,241,0.12)"
               dash={[4, 3]}
               listening={false}
             />
-          ))}
+          )}
 
           {drawBox && (
             <Rect
