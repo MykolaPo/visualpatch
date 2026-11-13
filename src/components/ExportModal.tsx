@@ -1,14 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check,
+  CheckCircle2,
   Copy,
   Download,
   FileCode2,
   FileText,
   FolderArchive,
   Image as ImageIcon,
+  ScanEye,
   Send,
   Sparkles,
+  Upload,
   X,
 } from 'lucide-react';
 import { useEditorStore } from '../store/useEditorStore';
@@ -20,6 +23,8 @@ import {
   renderComparisonDataUrl,
   renderResultDataUrl,
 } from '../utils/exportEngine';
+import { validateAndReadImageFile } from '../utils/imageImporter';
+import { compareImagesVisually, type VisualDiffResult } from '../utils/visualDiff';
 
 interface ExportModalProps {
   initialTab: 'export' | 'control-room';
@@ -56,7 +61,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const controlRoomConfig = useEditorStore((s) => s.controlRoomConfig);
   const setControlRoomConfig = useEditorStore((s) => s.setControlRoomConfig);
 
-  const [tab, setTab] = useState<'export' | 'control-room'>(initialTab);
+  const [tab, setTab] = useState<'export' | 'control-room' | 'verify'>(initialTab);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [aiMarkdown, setAiMarkdown] = useState<string | null>(null);
@@ -66,6 +71,34 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     url?: string;
     retryable?: boolean;
   }>({ status: 'idle', message: '' });
+
+  const [dispatches, setDispatches] = useState<
+    Array<{
+      dispatchId: string;
+      title: string;
+      status: string;
+      createdAt: string;
+    }>
+  >([]);
+  const [selectedDispatchId, setSelectedDispatchId] = useState<string>('');
+  const [diffResult, setDiffResult] = useState<VisualDiffResult | null>(null);
+  const [verifyNote, setVerifyNote] = useState('');
+  const [verifyMsg, setVerifyMsg] = useState<string | null>(null);
+  const verifyInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (tab !== 'verify') return;
+    fetch('/api/control-room/dispatches')
+      .then((r) => r.json())
+      .then((d: { items?: Array<{ dispatchId: string; title: string; status: string; createdAt: string }> }) => {
+        const items = d.items || [];
+        setDispatches(items);
+        if (items.length > 0 && !selectedDispatchId) {
+          setSelectedDispatchId(items[items.length - 1].dispatchId);
+        }
+      })
+      .catch(() => {});
+  }, [tab, selectedDispatchId]);
 
   const baseMarkdown = useMemo(() => {
     if (!project) return '';
@@ -262,6 +295,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             >
               <Send size={13} /> Control Room
             </button>
+            <button
+              className={`vp-btn ${tab === 'verify' ? 'vp-btn-active' : ''}`}
+              onClick={() => setTab('verify')}
+              data-testid="modal-tab-verify"
+            >
+              <ScanEye size={13} /> Приёмка (Этап 6)
+            </button>
           </div>
           <button className="vp-btn vp-btn-icon" onClick={onClose}>
             <X size={14} />
@@ -429,7 +469,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 </pre>
               </div>
             </div>
-          ) : (
+          ) : tab === 'control-room' ? (
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                 Передайте подготовленное задание AI-агентам или разработчикам через адаптер Control Room. Ключи доступа хранятся только локально и не попадают в экспортируемые файлы.
@@ -526,6 +566,191 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     : 'Отправить на реализацию'}
                 </button>
               </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                Загрузите скриншот реализации от AI-агента или разработчика — система сравнит его с ожидаемым макетом <code>result.png</code>, выделит расхождения и позволит принять работу или создать корректирующую задачу.
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="vp-input"
+                  style={{ flex: 1, minWidth: 200 }}
+                  value={selectedDispatchId}
+                  onChange={(e) => setSelectedDispatchId(e.target.value)}
+                >
+                  {dispatches.length === 0 ? (
+                    <option value="">Нет отправленных задач (можно сверить локально)</option>
+                  ) : (
+                    dispatches.map((d) => (
+                      <option key={d.dispatchId} value={d.dispatchId}>
+                        {d.dispatchId} · {d.title} [{d.status}]
+                      </option>
+                    ))
+                  )}
+                </select>
+                <button
+                  className="vp-btn vp-btn-primary"
+                  disabled={busy}
+                  onClick={() => verifyInputRef.current?.click()}
+                  data-testid="upload-agent-screenshot-btn"
+                >
+                  <Upload size={13} /> Загрузить скриншот результата
+                </button>
+                <input
+                  ref={verifyInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setBusy(true);
+                    setVerifyMsg(null);
+                    try {
+                      const { dataUrl } = await validateAndReadImageFile(f);
+                      const expectedUrl = await renderResultDataUrl(project, elements);
+                      const diff = await compareImagesVisually(expectedUrl, dataUrl);
+                      setDiffResult(diff);
+                    } catch (err) {
+                      setVerifyMsg(err instanceof Error ? err.message : 'Ошибка сравнения');
+                    } finally {
+                      setBusy(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </div>
+
+              {diffResult && (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      background: 'var(--bg-panel-elevated)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <div>
+                      <strong>Совпадение с макетом: {diffResult.matchPercentage}%</strong>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                        Зон расхождения: {diffResult.regions.length} ({diffResult.mismatchPixels} px)
+                      </div>
+                    </div>
+                  </div>
+
+                  <img
+                    src={diffResult.diffImageDataUrl}
+                    alt="Visual diff"
+                    style={{
+                      width: '100%',
+                      maxHeight: 240,
+                      objectFit: 'contain',
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      background: '#090b0f',
+                    }}
+                  />
+
+                  {diffResult.regions.length > 0 && (
+                    <div style={{ maxHeight: 110, overflowY: 'auto', fontSize: 11, color: 'var(--text-secondary)' }}>
+                      {diffResult.regions.map((r) => (
+                        <div key={r.id}>
+                          • {r.id} [{r.severity}]: X={r.x}, Y={r.y}, {r.width}×{r.height}px
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <textarea
+                    rows={2}
+                    className="vp-textarea"
+                    placeholder="Комментарий к приёмке или уточнения для корректирующей задачи..."
+                    value={verifyNote}
+                    onChange={(e) => setVerifyNote(e.target.value)}
+                  />
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button
+                      className="vp-btn"
+                      disabled={busy}
+                      onClick={async () => {
+                        if (selectedDispatchId) {
+                          await fetch(`/api/control-room/dispatches/${selectedDispatchId}/review`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ accepted: true, reviewNote: verifyNote }),
+                          });
+                        }
+                        setVerifyMsg('Результат подтверждён пользователем (статус: accepted).');
+                      }}
+                    >
+                      <CheckCircle2 size={13} /> Принять результат
+                    </button>
+                    <button
+                      className="vp-btn vp-btn-primary"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          if (selectedDispatchId) {
+                            await fetch(`/api/control-room/dispatches/${selectedDispatchId}/review`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ accepted: false, reviewNote: verifyNote }),
+                            });
+                          }
+                          const regionLines = diffResult.regions
+                            .map((r) => `- ${r.id} (${r.severity}): X=${r.x}, Y=${r.y}, ${r.width}x${r.height}px`)
+                            .join('\n');
+                          const res = await fetch('/api/control-room/dispatch', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              idempotencyKey: `followup-${project.id}-${Date.now()}`,
+                              projectId: project.id,
+                              targetProject: controlRoomConfig.targetProject,
+                              assignee: controlRoomConfig.assignee,
+                              title: `VisualPatch [Уточнение]: ${project.name}`,
+                              description: `Совпадение с макетом: ${diffResult.matchPercentage}%\n\nОбнаруженные расхождения:\n${regionLines}\n\nКомментарий: ${verifyNote || 'Привести вёрстку к макету result.png'}`,
+                              sourceUrl: project.sourceUrl,
+                              operations: [],
+                              comments: [],
+                              controlRoomEndpoint: controlRoomConfig.endpoint,
+                              apiToken: controlRoomConfig.apiToken,
+                            }),
+                          });
+                          const data = (await res.json()) as { dispatchId?: string };
+                          setVerifyMsg(`Создана корректирующая задача: ${data.dispatchId || 'ok'}`);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      <Send size={13} /> Создать корректирующую задачу
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {verifyMsg && (
+                <div
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    background: 'rgba(16, 185, 129, 0.14)',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    fontSize: 12,
+                  }}
+                >
+                  {verifyMsg}
+                </div>
+              )}
             </div>
           )}
         </div>

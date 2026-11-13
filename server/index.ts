@@ -17,9 +17,11 @@ interface DispatchRecord {
   targetProject: string;
   assignee?: string;
   title: string;
-  status: 'delivered' | 'queued_local';
+  status: 'delivered' | 'queued_local' | 'completed' | 'accepted' | 'needs_revision';
   externalUrl?: string;
+  reviewNote?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 const dispatchStore = new Map<string, DispatchRecord>();
@@ -169,6 +171,32 @@ app.post('/api/control-room/dispatch', async (req, res) => {
 
 app.get('/api/control-room/dispatches', (_req, res) => {
   res.status(200).json({ items: Array.from(dispatchStore.values()) });
+});
+
+app.get('/api/control-room/dispatches/:dispatchId', (req, res) => {
+  const found = Array.from(dispatchStore.values()).find(
+    (d) => d.dispatchId === req.params.dispatchId
+  );
+  if (!found) {
+    res.status(404).json({ error: 'Dispatch not found' });
+    return;
+  }
+  res.status(200).json(found);
+});
+
+app.post('/api/control-room/dispatches/:dispatchId/review', (req, res) => {
+  const found = Array.from(dispatchStore.values()).find(
+    (d) => d.dispatchId === req.params.dispatchId
+  );
+  if (!found) {
+    res.status(404).json({ error: 'Dispatch not found' });
+    return;
+  }
+  const { accepted, reviewNote } = req.body ?? {};
+  found.status = accepted ? 'accepted' : 'needs_revision';
+  found.reviewNote = typeof reviewNote === 'string' ? reviewNote : undefined;
+  found.updatedAt = new Date().toISOString();
+  res.status(200).json(found);
 });
 
 const distDir = path.resolve(process.cwd(), 'dist');
