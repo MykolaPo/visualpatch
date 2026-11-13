@@ -27,6 +27,11 @@ export const App: React.FC = () => {
   const moveElements = useEditorStore((s) => s.moveElements);
   const notice = useEditorStore((s) => s.notice);
   const setNotice = useEditorStore((s) => s.setNotice);
+  const theme = useEditorStore((s) => s.theme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [exportModal, setExportModal] = useState<'export' | 'control-room' | null>(

@@ -7,8 +7,10 @@ import {
   Grid,
   Magnet,
   Maximize2,
+  Moon,
   Redo2,
   Send,
+  Sun,
   Undo2,
   ZoomIn,
   ZoomOut,
@@ -39,6 +41,8 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenExport, onFitZoom }) => {
   const showDiffHighlights = useEditorStore((s) => s.showDiffHighlights);
   const toggleDiffHighlights = useEditorStore((s) => s.toggleDiffHighlights);
   const operationsCount = useEditorStore((s) => s.operations.length);
+  const theme = useEditorStore((s) => s.theme);
+  const toggleTheme = useEditorStore((s) => s.toggleTheme);
 
   if (!project) return null;
 
@@ -216,6 +220,15 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenExport, onFitZoom }) => {
         </div>
 
         <div className="vp-divider" />
+
+        <button
+          className="vp-btn vp-btn-icon"
+          title={theme === 'gray' ? 'Переключить на белую тему' : 'Переключить на серую тему'}
+          onClick={toggleTheme}
+          data-testid="theme-toggle-btn"
+        >
+          {theme === 'gray' ? <Sun size={13} /> : <Moon size={13} />}
+        </button>
 
         <button
           className="vp-btn hide-mobile"

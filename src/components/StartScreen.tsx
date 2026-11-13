@@ -4,7 +4,9 @@ import {
   FolderOpen,
   Globe,
   ImagePlus,
+  Moon,
   Sparkles,
+  Sun,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -22,6 +24,8 @@ import {
 export const StartScreen: React.FC = () => {
   const createProjectFromImage = useEditorStore((s) => s.createProjectFromImage);
   const loadSnapshot = useEditorStore((s) => s.loadSnapshot);
+  const theme = useEditorStore((s) => s.theme);
+  const toggleTheme = useEditorStore((s) => s.toggleTheme);
 
   const [savedProjects, setSavedProjects] = useState<SavedProjectMeta[]>([]);
   const [sourceUrl, setSourceUrl] = useState('');
@@ -230,6 +234,15 @@ export const StartScreen: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="vp-btn"
+              onClick={toggleTheme}
+              title={theme === 'gray' ? 'Белая тема' : 'Серая тема'}
+              data-testid="start-theme-toggle-btn"
+            >
+              {theme === 'gray' ? <Sun size={14} /> : <Moon size={14} />}
+              {theme === 'gray' ? 'Белая' : 'Серая'}
+            </button>
             <button
               className="vp-btn"
               onClick={() => projectInputRef.current?.click()}

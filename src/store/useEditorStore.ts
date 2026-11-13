@@ -50,10 +50,12 @@ interface EditorState {
   detectedRegions: DetectedRegion[];
   isDetecting: boolean;
   notice: string | null;
+  theme: 'gray' | 'light';
 
   aiConfig: AIProviderConfig;
   controlRoomConfig: ControlRoomConfig;
 
+  toggleTheme: () => void;
   setNotice: (msg: string | null) => void;
   setActiveTool: (tool: ToolType) => void;
   setCompareMode: (mode: CompareMode) => void;
@@ -218,6 +220,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   detectedRegions: [],
   isDetecting: false,
   notice: null,
+  theme: (() => {
+    try {
+      const saved = localStorage.getItem('vp_theme');
+      return saved === 'light' ? 'light' : 'gray';
+    } catch {
+      return 'gray';
+    }
+  })(),
 
   aiConfig: loadLocalJson<AIProviderConfig>('vp_ai_config', {
     mode: 'local',
@@ -232,6 +242,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     apiToken: '',
   }),
 
+  toggleTheme: () =>
+    set((s) => {
+      const next = s.theme === 'gray' ? 'light' : 'gray';
+      try {
+        localStorage.setItem('vp_theme', next);
+      } catch {
+        // ignore
+      }
+      return { theme: next };
+    }),
   setNotice: (msg) => set({ notice: msg }),
   setActiveTool: (tool) => set({ activeTool: tool }),
   setCompareMode: (mode) => set({ compareMode: mode }),

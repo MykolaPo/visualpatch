@@ -653,7 +653,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                       objectFit: 'contain',
                       borderRadius: 8,
                       border: '1px solid var(--border)',
-                      background: '#090b0f',
+                      background: 'var(--bg-canvas)',
                     }}
                   />
 

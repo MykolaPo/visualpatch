@@ -1,20 +1,45 @@
-:root {
-  --bg-app: #0d0f14;
-  --bg-panel: #14171f;
-  --bg-panel-elevated: #1c202b;
-  --bg-hover: #242936;
-  --border: #272c3a;
-  --border-strong: #373e52;
-  --text-primary: #eef1f7;
-  --text-secondary: #98a2b3;
-  --text-muted: #667085;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --accent-soft: rgba(99, 102, 241, 0.16);
+:root,
+:root[data-theme='gray'] {
+  --bg-app: #141518;
+  --bg-canvas: #101114;
+  --bg-panel: #1b1c20;
+  --bg-panel-elevated: #23252a;
+  --bg-hover: #2c2f36;
+  --border: #2e3138;
+  --border-strong: #3f434d;
+  --text-primary: #f1f3f5;
+  --text-secondary: #a1a7b3;
+  --text-muted: #6e7480;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.18);
+  --accent-text: #93c5fd;
   --danger: #ef4444;
   --success: #10b981;
   --warning: #f59e0b;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+:root[data-theme='light'] {
+  --bg-app: #f3f4f6;
+  --bg-canvas: #e5e7eb;
+  --bg-panel: #ffffff;
+  --bg-panel-elevated: #f8f9fa;
+  --bg-hover: #eceef2;
+  --border: #e1e4e8;
+  --border-strong: #cbd0d8;
+  --text-primary: #111827;
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.12);
+  --accent-text: #1d4ed8;
+  --danger: #dc2626;
+  --success: #059669;
+  --warning: #d97706;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
@@ -34,6 +59,7 @@ body,
   font-family: var(--font-sans);
   font-size: 13px;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -108,7 +134,7 @@ button {
 .vp-btn-active {
   background: var(--accent-soft);
   border-color: var(--accent);
-  color: #c7d2fe;
+  color: var(--accent-text);
 }
 
 .vp-input {
@@ -182,7 +208,7 @@ button {
     top: 0;
     bottom: 0;
     z-index: 40;
-    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
   }
   .left-drawer {
     position: absolute !important;
@@ -190,6 +216,6 @@ button {
     top: 0;
     bottom: 0;
     z-index: 40;
-    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.5);
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
   }
 }

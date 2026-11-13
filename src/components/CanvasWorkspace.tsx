@@ -767,7 +767,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({ containerRef }
         flex: 1,
         position: 'relative',
         overflow: 'hidden',
-        background: '#090b0f',
+        background: 'var(--bg-canvas)',
         cursor: isPanMode
           ? 'grab'
           : activeTool === 'crop' ||
